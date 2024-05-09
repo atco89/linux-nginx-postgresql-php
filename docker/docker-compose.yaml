@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  # Nginx service for web serving
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    image: nginx:1.26.0-alpine3.19
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/certs:/etc/nginx/ssl
+      - ./nginx/authentication:/etc/nginx/authentication
+      - ./nginx/config/custom:/etc/nginx/custom
+      - ./nginx/config/nginx.conf:/etc/nginx/conf.d/custom.conf
+      - ../src:/var/www/html
+    environment:
+      APP_SERVER_NAME: ${APP_SERVER_NAME}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        envsubst '$${APP_SERVER_NAME}' < /etc/nginx/conf.d/custom.conf > /etc/nginx/nginx.conf 
+        nginx -g 'daemon off;'
+    depends_on:
+      - php
+    networks:
+      backend:
+        ipv4_address: 10.0.0.2
+
+  # PostgreSQL service for database management
+  postgres:
+    container_name: postgres
+    restart: always
+    image: postgres:16.2-alpine3.19
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/postgres/data:/var/lib/postgresql/data
+      - ./database/scripts:/docker-entrypoint-initdb.d
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_PASSWORD}'" ]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+    networks:
+      backend:
+        ipv4_address: 10.0.0.3
+
+  # PHP service for running PHP-FPM
+  php:
+    container_name: php
+    restart: unless-stopped
+    build:
+      context: ../
+      dockerfile: docker/web/php/Dockerfile
+    volumes:
+      - ./web/php/config/www.conf:/usr/local/etc/php-fpm.d/www.conf
+      - ./web/php/config/php.ini:/usr/local/etc/php/conf.d/php.ini
+      - ../src:/var/www/html
+    networks:
+      backend:
+        ipv4_address: 10.0.0.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Network configuration for container communication
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.0.0/29

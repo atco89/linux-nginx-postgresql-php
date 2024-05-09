@@ -1,0 +1,23 @@
+# Ignore IDE-specific files and directories
+.env
+.idea
+.vscode
+.htpasswd
+.DS_Store
+
+*.log
+*.crt
+*.pem
+*.env
+*.env.*
+
+# Ignore application source code.
+/src
+
+# Ignore Docker-related files and directories.
+!/docker/.env.example
+/docker/nginx/logs/
+/docker/nginx/certs/
+/docker/nginx/authentication/
+/docker/database/postgres/
+/vcs/
